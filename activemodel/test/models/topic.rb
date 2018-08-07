@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Topic
   include ActiveModel::Validations
   include ActiveModel::Validations::Callbacks
@@ -6,7 +8,7 @@ class Topic
     super | [ :message ]
   end
 
-  attr_accessor :title, :author_name, :content, :approved
+  attr_accessor :title, :author_name, :content, :approved, :created_at
   attr_accessor :after_validation_performed
 
   after_validation :perform_after_validation
@@ -21,7 +23,7 @@ class Topic
     true
   end
 
-  def condition_is_true_but_its_not
+  def condition_is_false
     false
   end
 
@@ -36,5 +38,4 @@ class Topic
   def my_validation_with_arg(attr)
     errors.add attr, "is missing" unless send(attr)
   end
-
 end

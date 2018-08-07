@@ -1,16 +1,17 @@
+# frozen_string_literal: true
+
+require "active_support/core_ext/module/redefine_method"
+
 class Module
+  # Removes the named method, if it exists.
   def remove_possible_method(method)
     if method_defined?(method) || private_method_defined?(method)
-      remove_method(method)
+      undef_method(method)
     end
-  rescue NameError
-    # If the requested method is defined on a superclass or included module,
-    # method_defined? returns true but remove_method throws a NameError.
-    # Ignore this.
   end
 
-  def redefine_method(method, &block)
-    remove_possible_method(method)
-    define_method(method, &block)
+  # Removes the named singleton method, if it exists.
+  def remove_possible_singleton_method(method)
+    singleton_class.remove_possible_method(method)
   end
 end

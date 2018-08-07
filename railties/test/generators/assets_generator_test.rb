@@ -1,7 +1,8 @@
-require 'generators/generators_test_helper'
-require 'rails/generators/rails/assets/assets_generator'
+# frozen_string_literal: true
 
-# FIXME: Silence the 'Could not find task "using_coffee?"' message in tests due to the public stub
+require "generators/generators_test_helper"
+require "rails/generators/rails/assets/assets_generator"
+
 class AssetsGeneratorTest < Rails::Generators::TestCase
   include GeneratorsTestHelper
   arguments %w(posts)

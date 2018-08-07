@@ -1,53 +1,57 @@
+# frozen_string_literal: true
+
+require "active_support/core_ext/hash/except"
+require "active_support/core_ext/hash/slice"
+
 module ActionController
-  # This module provides a method which will redirect browser to use HTTPS
-  # protocol. This will ensure that user's sensitive information will be
-  # transferred safely over the internet. You _should_ always force browser
-  # to use HTTPS when you're transferring sensitive information such as
-  # user authentication, account information, or credit card information.
-  #
-  # Note that if you are really concerned about your application security,
-  # you might consider using +config.force_ssl+ in your config file instead.
-  # That will ensure all the data transferred via HTTPS protocol and prevent
-  # user from getting session hijacked when accessing the site under unsecured
-  # HTTP protocol.
-  module ForceSSL
+  # This module is deprecated in favor of +config.force_ssl+ in your environment
+  # config file. This will ensure all communication to non-whitelisted endpoints
+  # served by your application occurs over HTTPS.
+  module ForceSSL # :nodoc:
     extend ActiveSupport::Concern
     include AbstractController::Callbacks
 
-    module ClassMethods
-      # Force the request to this particular controller or specified actions to be
-      # under HTTPS protocol.
-      #
-      # If you need to disable this for any reason (e.g. development) then you can use
-      # an +:if+ or +:unless+ condition.
-      #
-      #     class AccountsController < ApplicationController
-      #       force_ssl :if => :ssl_configured?
-      #
-      #       def ssl_configured?
-      #         !Rails.env.development?
-      #       end
-      #     end
-      #
-      # ==== Options
-      # * <tt>host</tt>   - Redirect to a different host name
-      # * <tt>only</tt>   - The callback should be run only for this action
-      # * <tt>except<tt>  - The callback should be run for all actions except this action
-      # * <tt>if</tt>     - A symbol naming an instance method or a proc; the callback
-      #                     will be called only when it returns a true value.
-      # * <tt>unless</tt> - A symbol naming an instance method or a proc; the callback
-      #                     will be called only when it returns a false value.
+    ACTION_OPTIONS = [:only, :except, :if, :unless]
+    URL_OPTIONS = [:protocol, :host, :domain, :subdomain, :port, :path]
+    REDIRECT_OPTIONS = [:status, :flash, :alert, :notice]
+
+    module ClassMethods # :nodoc:
       def force_ssl(options = {})
-        host = options.delete(:host)
-        before_filter(options) do
-          unless request.ssl?
-            redirect_options = {:protocol => 'https://', :status => :moved_permanently}
-            redirect_options.merge!(:host => host) if host
-            redirect_options.merge!(:params => request.query_parameters)
-            flash.keep if respond_to?(:flash)
-            redirect_to redirect_options
-          end
+        ActiveSupport::Deprecation.warn(<<-MESSAGE.squish)
+          Controller-level `force_ssl` is deprecated and will be removed from
+          Rails 6.1. Please enable `config.force_ssl` in your environment
+          configuration to enable the ActionDispatch::SSL middleware to more
+          fully enforce that your application communicate over HTTPS. If needed,
+          you can use `config.ssl_options` to exempt matching endpoints from
+          being redirected to HTTPS.
+        MESSAGE
+
+        action_options = options.slice(*ACTION_OPTIONS)
+        redirect_options = options.except(*ACTION_OPTIONS)
+        before_action(action_options) do
+          force_ssl_redirect(redirect_options)
         end
+      end
+    end
+
+    def force_ssl_redirect(host_or_options = nil)
+      unless request.ssl?
+        options = {
+          protocol: "https://",
+          host: request.host,
+          path: request.fullpath,
+          status: :moved_permanently
+        }
+
+        if host_or_options.is_a?(Hash)
+          options.merge!(host_or_options)
+        elsif host_or_options
+          options[:host] = host_or_options
+        end
+
+        secure_url = ActionDispatch::Http::URL.url_for(options.slice(*URL_OPTIONS))
+        flash.keep if respond_to?(:flash) && request.respond_to?(:flash)
+        redirect_to secure_url, options.slice(*REDIRECT_OPTIONS)
       end
     end
   end

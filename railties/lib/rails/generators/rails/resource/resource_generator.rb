@@ -1,29 +1,21 @@
-require 'rails/generators/resource_helpers'
-require 'rails/generators/rails/model/model_generator'
-require 'active_support/core_ext/object/blank'
+# frozen_string_literal: true
+
+require "rails/generators/resource_helpers"
+require "rails/generators/rails/model/model_generator"
 
 module Rails
   module Generators
-    class ResourceGenerator < ModelGenerator #metagenerator
+    class ResourceGenerator < ModelGenerator # :nodoc:
       include ResourceHelpers
 
-      hook_for :resource_controller, :required => true do |controller|
+      hook_for :resource_controller, required: true do |controller|
         invoke controller, [ controller_name, options[:actions] ]
       end
 
-      class_option :actions, :type => :array, :banner => "ACTION ACTION", :default => [],
-                             :desc => "Actions for the resource controller"
+      class_option :actions, type: :array, banner: "ACTION ACTION", default: [],
+                             desc: "Actions for the resource controller"
 
-      class_option :http, :type => :boolean, :default => false,
-                          :desc => "Generate resource with HTTP actions only"
-
-      def add_resource_route
-        return if options[:actions].present?
-        route_config =  regular_class_path.collect{ |namespace| "namespace :#{namespace} do " }.join(" ")
-        route_config << "resources :#{file_name.pluralize}"
-        route_config << " end" * regular_class_path.size
-        route route_config
-      end
+      hook_for :resource_route, required: true
     end
   end
 end

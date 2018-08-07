@@ -1,50 +1,29 @@
-pwd = File.dirname(__FILE__)
-$:.unshift pwd
+# frozen_string_literal: true
 
-# This is a predicate useful for the doc:guides task of applications.
-def bundler?
-  # Note that rake sets the cwd to the one that contains the Rakefile
-  # being executed.
-  File.exists?('Gemfile')
-end
+$:.unshift __dir__
 
-# Loading Action Pack requires rack and erubis.
-require 'rubygems'
+as_lib = File.expand_path("../activesupport/lib", __dir__)
+ap_lib = File.expand_path("../actionpack/lib", __dir__)
+av_lib = File.expand_path("../actionview/lib", __dir__)
 
-begin
-  # Guides generation in the Rails repo.
-  as_lib = File.join(pwd, "../activesupport/lib")
-  ap_lib = File.join(pwd, "../actionpack/lib")
-
-  $:.unshift as_lib if File.directory?(as_lib)
-  $:.unshift ap_lib if File.directory?(ap_lib)
-rescue LoadError
-  # Guides generation from gems.
-  gem "actionpack", '>= 3.0'
-end
-
-begin
-  require 'redcloth'
-rescue Gem::LoadError
-  # This can happen if doc:guides is executed in an application.
-  $stderr.puts('Generating guides requires RedCloth 4.1.1+.')
-  $stderr.puts(<<ERROR) if bundler?
-Please add
-
-  gem 'RedCloth', '~> 4.2'
-
-to the Gemfile, run
-
-  bundle install
-
-and try again.
-ERROR
-
-  exit 1
-end
-
-require "rails_guides/textile_extensions"
-RedCloth.send(:include, RailsGuides::TextileExtensions)
+$:.unshift as_lib if File.directory?(as_lib)
+$:.unshift ap_lib if File.directory?(ap_lib)
+$:.unshift av_lib if File.directory?(av_lib)
 
 require "rails_guides/generator"
-RailsGuides::Generator.new.generate
+require "active_support/core_ext/object/blank"
+
+env_value = ->(name) { ENV[name].presence }
+env_flag  = ->(name) { "1" == env_value[name] }
+
+version = env_value["RAILS_VERSION"]
+edge    = `git rev-parse HEAD`.strip unless version
+
+RailsGuides::Generator.new(
+  edge:     edge,
+  version:  version,
+  all:      env_flag["ALL"],
+  only:     env_value["ONLY"],
+  kindle:   env_flag["KINDLE"],
+  language: env_value["GUIDES_LANGUAGE"]
+).generate

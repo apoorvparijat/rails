@@ -1,4 +1,6 @@
-require 'active_support/inflector'
+# frozen_string_literal: true
+
+require "active_support/inflector"
 
 class Integer
   # Ordinalize turns a number into an ordinal string used to denote the
@@ -10,7 +12,6 @@ class Integer
   #  1003.ordinalize  # => "1003rd"
   #  -11.ordinalize   # => "-11th"
   #  -1001.ordinalize # => "-1001st"
-  #
   def ordinalize
     ActiveSupport::Inflector.ordinalize(self)
   end
@@ -24,7 +25,6 @@ class Integer
   #  1003.ordinal  # => "rd"
   #  -11.ordinal   # => "th"
   #  -1001.ordinal # => "st"
-  #
   def ordinal
     ActiveSupport::Inflector.ordinal(self)
   end

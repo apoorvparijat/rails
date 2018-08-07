@@ -1,12 +1,13 @@
+# frozen_string_literal: true
+
 require "isolation/abstract_unit"
 
 module ApplicationTests
-  class InitializersTest < ActiveSupport::TestCase
+  class HooksTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
 
     def setup
       build_app
-      boot_rails
       FileUtils.rm_rf "#{app_path}/config/environments"
     end
 
@@ -20,11 +21,11 @@ module ApplicationTests
       assert $foo
     end
 
-    test "hooks block works correctly without cache classes (before_eager_load is not called)" do
+    test "hooks block works correctly without eager_load (before_eager_load is not called)" do
       add_to_config <<-RUBY
         $initialization_callbacks = []
         config.root = "#{app_path}"
-        config.cache_classes = false
+        config.eager_load = false
         config.before_configuration { $initialization_callbacks << 1 }
         config.before_initialize    { $initialization_callbacks << 2 }
         config.before_eager_load    { Boom }
@@ -32,14 +33,14 @@ module ApplicationTests
       RUBY
 
       require "#{app_path}/config/environment"
-      assert_equal [1,2,3], $initialization_callbacks
+      assert_equal [1, 2, 3], $initialization_callbacks
     end
 
-    test "hooks block works correctly with cache classes" do
+    test "hooks block works correctly with eager_load" do
       add_to_config <<-RUBY
         $initialization_callbacks = []
         config.root = "#{app_path}"
-        config.cache_classes = true
+        config.eager_load = true
         config.before_configuration { $initialization_callbacks << 1 }
         config.before_initialize    { $initialization_callbacks << 2 }
         config.before_eager_load    { $initialization_callbacks << 3 }
@@ -47,7 +48,7 @@ module ApplicationTests
       RUBY
 
       require "#{app_path}/config/environment"
-      assert_equal [1,2,3,4], $initialization_callbacks
+      assert_equal [1, 2, 3, 4], $initialization_callbacks
     end
 
     test "after_initialize runs after frameworks have been initialized" do
@@ -58,7 +59,7 @@ module ApplicationTests
 
       require "#{app_path}/config/environment"
       assert $activerecord_configurations
-      assert $activerecord_configurations['development']
+      assert $activerecord_configurations["development"]
     end
 
     test "after_initialize happens after to_prepare in development" do

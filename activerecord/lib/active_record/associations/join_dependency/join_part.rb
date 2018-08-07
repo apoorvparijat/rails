@@ -1,32 +1,43 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   module Associations
     class JoinDependency # :nodoc:
-      # A JoinPart represents a part of a JoinDependency. It is an abstract class, inherited
+      # A JoinPart represents a part of a JoinDependency. It is inherited
       # by JoinBase and JoinAssociation. A JoinBase represents the Active Record which
       # everything else is being joined onto. A JoinAssociation represents an association which
       # is joining to the base. A JoinAssociation may result in more than one actual join
       # operations (for example a has_and_belongs_to_many JoinAssociation would result in
       # two; one for the join table and one for the target table).
       class JoinPart # :nodoc:
+        include Enumerable
+
         # The Active Record class which this join part is associated 'about'; for a JoinBase
         # this is the actual base model, for a JoinAssociation this is the target model of the
         # association.
-        attr_reader :active_record
+        attr_reader :base_klass, :children
 
-        delegate :table_name, :column_names, :primary_key, :reflections, :arel_engine, :to => :active_record
+        delegate :table_name, :column_names, :primary_key, to: :base_klass
 
-        def initialize(active_record)
-          @active_record = active_record
-          @cached_record = {}
-          @column_names_with_alias = nil
+        def initialize(base_klass, children)
+          @base_klass = base_klass
+          @children = children
         end
 
-        def aliased_table
-          Arel::Nodes::TableAlias.new table, aliased_table_name
+        def match?(other)
+          self.class == other.class
         end
 
-        def ==(other)
-          raise NotImplementedError
+        def each(&block)
+          yield self
+          children.each { |child| child.each(&block) }
+        end
+
+        def each_children(&block)
+          children.each do |child|
+            yield self, child
+            child.each_children(&block)
+          end
         end
 
         # An Arel::Table for the active_record
@@ -34,43 +45,25 @@ module ActiveRecord
           raise NotImplementedError
         end
 
-        # The prefix to be used when aliasing columns in the active_record's table
-        def aliased_prefix
-          raise NotImplementedError
-        end
+        def extract_record(row, column_names_with_alias)
+          # This code is performance critical as it is called per row.
+          # see: https://github.com/rails/rails/pull/12185
+          hash = {}
 
-        # The alias for the active_record's table
-        def aliased_table_name
-          raise NotImplementedError
-        end
+          index = 0
+          length = column_names_with_alias.length
 
-        # The alias for the primary key of the active_record's table
-        def aliased_primary_key
-          "#{aliased_prefix}_r0"
-        end
-
-        # An array of [column_name, alias] pairs for the table
-        def column_names_with_alias
-          unless @column_names_with_alias
-            @column_names_with_alias = []
-
-            ([primary_key] + (column_names - [primary_key])).each_with_index do |column_name, i|
-              @column_names_with_alias << [column_name, "#{aliased_prefix}_r#{i}"]
-            end
+          while index < length
+            column = column_names_with_alias[index]
+            hash[column.name] = row[column.alias]
+            index += 1
           end
-          @column_names_with_alias
+
+          hash
         end
 
-        def extract_record(row)
-          Hash[column_names_with_alias.map{|cn, an| [cn, row[an]]}]
-        end
-
-        def record_id(row)
-          row[aliased_primary_key]
-        end
-
-        def instantiate(row)
-          @cached_record[record_id(row)] ||= active_record.send(:instantiate, extract_record(row))
+        def instantiate(row, aliases, &block)
+          base_klass.instantiate(extract_record(row, aliases), &block)
         end
       end
     end

@@ -1,4 +1,5 @@
-Dir["#{File.dirname(__FILE__)}/core_ext/*.rb"].sort.each do |path|
-  next if File.basename(path, '.rb') == 'logger'
-  require "active_support/core_ext/#{File.basename(path, '.rb')}"
+# frozen_string_literal: true
+
+Dir.glob(File.expand_path("core_ext/*.rb", __dir__)).each do |path|
+  require path
 end

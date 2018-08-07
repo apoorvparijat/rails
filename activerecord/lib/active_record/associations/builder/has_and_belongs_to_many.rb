@@ -1,57 +1,114 @@
-module ActiveRecord::Associations::Builder
-  class HasAndBelongsToMany < CollectionAssociation #:nodoc:
-    self.macro = :has_and_belongs_to_many
+# frozen_string_literal: true
 
-    self.valid_options += [:join_table, :association_foreign_key, :delete_sql, :insert_sql]
+module ActiveRecord::Associations::Builder # :nodoc:
+  class HasAndBelongsToMany # :nodoc:
+    attr_reader :lhs_model, :association_name, :options
 
-    def build
-      reflection = super
-      check_validity(reflection)
-      define_destroy_hook
-      reflection
+    def initialize(association_name, lhs_model, options)
+      @association_name = association_name
+      @lhs_model = lhs_model
+      @options = options
+    end
+
+    def through_model
+      join_model = Class.new(ActiveRecord::Base) {
+        class << self
+          attr_accessor :left_model
+          attr_accessor :name
+          attr_accessor :table_name_resolver
+          attr_accessor :left_reflection
+          attr_accessor :right_reflection
+        end
+
+        def self.table_name
+          # Table name needs to be resolved lazily
+          # because RHS class might not have been loaded
+          @table_name ||= table_name_resolver.call
+        end
+
+        def self.compute_type(class_name)
+          left_model.compute_type class_name
+        end
+
+        def self.add_left_association(name, options)
+          belongs_to name, required: false, **options
+          self.left_reflection = _reflect_on_association(name)
+        end
+
+        def self.add_right_association(name, options)
+          rhs_name = name.to_s.singularize.to_sym
+          belongs_to rhs_name, required: false, **options
+          self.right_reflection = _reflect_on_association(rhs_name)
+        end
+
+        def self.retrieve_connection
+          left_model.retrieve_connection
+        end
+
+        private
+
+          def self.suppress_composite_primary_key(pk)
+            pk unless pk.is_a?(Array)
+          end
+      }
+
+      join_model.name                = "HABTM_#{association_name.to_s.camelize}"
+      join_model.table_name_resolver = -> { table_name }
+      join_model.left_model          = lhs_model
+
+      join_model.add_left_association :left_side, anonymous_class: lhs_model
+      join_model.add_right_association association_name, belongs_to_options(options)
+      join_model
+    end
+
+    def middle_reflection(join_model)
+      middle_name = [lhs_model.name.downcase.pluralize,
+                     association_name].join("_".freeze).gsub("::".freeze, "_".freeze).to_sym
+      middle_options = middle_options join_model
+
+      HasMany.create_reflection(lhs_model,
+                                middle_name,
+                                nil,
+                                middle_options)
     end
 
     private
 
-      def define_destroy_hook
-        name = self.name
-        model.send(:include, Module.new {
-          class_eval <<-RUBY, __FILE__, __LINE__ + 1
-            def destroy_associations
-              association(#{name.to_sym.inspect}).delete_all_on_destroy
-              super
-            end
-          RUBY
-        })
-      end
-
-      # TODO: These checks should probably be moved into the Reflection, and we should not be
-      #       redefining the options[:join_table] value - instead we should define a
-      #       reflection.join_table method.
-      def check_validity(reflection)
-        if reflection.association_foreign_key == reflection.foreign_key
-          raise ActiveRecord::HasAndBelongsToManyAssociationForeignKeyNeeded.new(reflection)
+      def middle_options(join_model)
+        middle_options = {}
+        middle_options[:class_name] = "#{lhs_model.name}::#{join_model.name}"
+        middle_options[:source] = join_model.left_reflection.name
+        if options.key? :foreign_key
+          middle_options[:foreign_key] = options[:foreign_key]
         end
-
-        reflection.options[:join_table] ||= join_table_name(
-          model.send(:undecorated_table_name, model.to_s),
-          model.send(:undecorated_table_name, reflection.class_name)
-        )
+        middle_options
       end
 
-      # Generates a join table name from two provided table names.
-      # The names in the join table names end up in lexicographic order.
-      #
-      #   join_table_name("members", "clubs")         # => "clubs_members"
-      #   join_table_name("members", "special_clubs") # => "members_special_clubs"
-      def join_table_name(first_table_name, second_table_name)
-        if first_table_name < second_table_name
-          join_table = "#{first_table_name}_#{second_table_name}"
+      def table_name
+        if options[:join_table]
+          options[:join_table].to_s
         else
-          join_table = "#{second_table_name}_#{first_table_name}"
+          class_name = options.fetch(:class_name) {
+            association_name.to_s.camelize.singularize
+          }
+          klass = lhs_model.send(:compute_type, class_name.to_s)
+          [lhs_model.table_name, klass.table_name].sort.join("\0").gsub(/^(.*[._])(.+)\0\1(.+)/, '\1\2_\3').tr("\0", "_")
+        end
+      end
+
+      def belongs_to_options(options)
+        rhs_options = {}
+
+        if options.key? :class_name
+          rhs_options[:foreign_key] = options[:class_name].to_s.foreign_key
+          rhs_options[:class_name] = options[:class_name]
         end
 
-        model.table_name_prefix + join_table + model.table_name_suffix
+        if options.key? :association_foreign_key
+          rhs_options[:foreign_key] = options[:association_foreign_key]
+        end
+
+        rhs_options
       end
   end
 end

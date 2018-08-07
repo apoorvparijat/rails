@@ -1,13 +1,11 @@
-require 'rails/generators/test_unit'
+# frozen_string_literal: true
 
-module TestUnit
-  module Generators
-    class HelperGenerator < Base
-      check_class_collision :suffix => "HelperTest"
+require "rails/generators/test_unit"
 
-      def create_helper_files
-        template 'helper_test.rb', File.join('test/unit/helpers', class_path, "#{file_name}_helper_test.rb")
-      end
+module TestUnit # :nodoc:
+  module Generators # :nodoc:
+    class HelperGenerator < Base # :nodoc:
+      # Rails does not generate anything here.
     end
   end
 end

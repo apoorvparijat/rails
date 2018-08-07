@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Hash
   # By default, only instances of Hash itself are extractable.
   # Subclasses of Hash may implement this method and return
@@ -17,8 +19,8 @@ class Array
   #     args.extract_options!
   #   end
   #
-  #   options(1, 2)           # => {}
-  #   options(1, 2, :a => :b) # => {:a=>:b}
+  #   options(1, 2)        # => {}
+  #   options(1, 2, a: :b) # => {:a=>:b}
   def extract_options!
     if last.is_a?(Hash) && last.extractable_options?
       pop

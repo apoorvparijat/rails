@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 require "active_support/benchmarkable"
 
 module AbstractController
-  module Logger
+  module Logger #:nodoc:
     extend ActiveSupport::Concern
 
     included do

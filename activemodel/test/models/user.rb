@@ -1,8 +1,13 @@
+# frozen_string_literal: true
+
 class User
-  include ActiveModel::Validations
+  extend ActiveModel::Callbacks
   include ActiveModel::SecurePassword
 
-  has_secure_password
+  define_model_callbacks :create
 
-  attr_accessor :password_digest, :password_salt
+  has_secure_password
+  has_secure_password :recovery_password, validations: false
+
+  attr_accessor :password_digest, :recovery_password_digest
 end

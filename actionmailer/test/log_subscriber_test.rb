@@ -1,5 +1,7 @@
+# frozen_string_literal: true
+
 require "abstract_unit"
-require 'mailers/base_mailer'
+require "mailers/base_mailer"
 require "active_support/log_subscriber/test_helper"
 require "action_mailer/log_subscriber"
 
@@ -22,16 +24,21 @@ class AMLogSubscriberTest < ActionMailer::TestCase
   end
 
   def test_deliver_is_notified
-    BaseMailer.welcome.deliver
+    BaseMailer.welcome.deliver_now
     wait
+
     assert_equal(1, @logger.logged(:info).size)
-    assert_match(/Sent mail to system@test.lindsaar.net/, @logger.logged(:info).first)
-    assert_equal(1, @logger.logged(:debug).size)
-    assert_match(/Welcome/, @logger.logged(:debug).first)
+    assert_match(/Sent mail to system@test\.lindsaar\.net/, @logger.logged(:info).first)
+
+    assert_equal(2, @logger.logged(:debug).size)
+    assert_match(/BaseMailer#welcome: processed outbound mail in [\d.]+ms/, @logger.logged(:debug).first)
+    assert_match(/Welcome/, @logger.logged(:debug).second)
+  ensure
+    BaseMailer.deliveries.clear
   end
 
   def test_receive_is_notified
-    fixture = File.read(File.dirname(__FILE__) + "/fixtures/raw_email")
+    fixture = File.read(File.expand_path("fixtures/raw_email", __dir__))
     TestMailer.receive(fixture)
     wait
     assert_equal(1, @logger.logged(:info).size)

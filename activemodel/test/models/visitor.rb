@@ -1,9 +1,13 @@
-class Visitor
-  include ActiveModel::Validations
-  include ActiveModel::SecurePassword
-  include ActiveModel::MassAssignmentSecurity
+# frozen_string_literal: true
 
-  has_secure_password
+class Visitor
+  extend ActiveModel::Callbacks
+  include ActiveModel::SecurePassword
+
+  define_model_callbacks :create
+
+  has_secure_password(validations: false)
 
   attr_accessor :password_digest
+  attr_reader :password_confirmation
 end

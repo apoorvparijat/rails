@@ -1,12 +1,14 @@
-require 'abstract_unit'
-require 'active_support/core_ext/file'
+# frozen_string_literal: true
+
+require "abstract_unit"
+require "active_support/core_ext/file"
 
 class AtomicWriteTest < ActiveSupport::TestCase
   def test_atomic_write_without_errors
     contents = "Atomic Text"
     File.atomic_write(file_name, Dir.pwd) do |file|
       file.write(contents)
-      assert !File.exist?(file_name)
+      assert_not File.exist?(file_name)
     end
     assert File.exist?(file_name)
     assert_equal contents, File.read(file_name)
@@ -20,7 +22,7 @@ class AtomicWriteTest < ActiveSupport::TestCase
       raise "something bad"
     end
   rescue
-    assert !File.exist?(file_name)
+    assert_not File.exist?(file_name)
   end
 
   def test_atomic_write_preserves_file_permissions
@@ -30,7 +32,7 @@ class AtomicWriteTest < ActiveSupport::TestCase
       assert File.exist?(file_name)
     end
     assert File.exist?(file_name)
-    assert_equal 0100755, file_mode
+    assert_equal 0100755 & ~File.umask, file_mode
     assert_equal contents, File.read(file_name)
 
     File.atomic_write(file_name, Dir.pwd) do |file|
@@ -38,7 +40,7 @@ class AtomicWriteTest < ActiveSupport::TestCase
       assert File.exist?(file_name)
     end
     assert File.exist?(file_name)
-    assert_equal 0100755, file_mode
+    assert_equal 0100755 & ~File.umask, file_mode
     assert_equal contents, File.read(file_name)
   ensure
     File.unlink(file_name) rescue nil
@@ -48,11 +50,21 @@ class AtomicWriteTest < ActiveSupport::TestCase
     contents = "Atomic Text"
     File.atomic_write(file_name, Dir.pwd) do |file|
       file.write(contents)
-      assert !File.exist?(file_name)
+      assert_not File.exist?(file_name)
     end
     assert File.exist?(file_name)
-    assert_equal 0100666 ^ File.umask, file_mode
+    assert_equal File.probe_stat_in(Dir.pwd).mode, file_mode
     assert_equal contents, File.read(file_name)
+  ensure
+    File.unlink(file_name) rescue nil
+  end
+
+  def test_atomic_write_returns_result_from_yielded_block
+    block_return_value = File.atomic_write(file_name, Dir.pwd) do |file|
+      "Hello world!"
+    end
+
+    assert_equal "Hello world!", block_return_value
   ensure
     File.unlink(file_name) rescue nil
   end

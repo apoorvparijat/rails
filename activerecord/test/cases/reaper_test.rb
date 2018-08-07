@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "cases/helper"
 
 module ActiveRecord
@@ -10,13 +12,13 @@ module ActiveRecord
         @pool = ConnectionPool.new ActiveRecord::Base.connection_pool.spec
       end
 
-      def teardown
-        super
+      teardown do
         @pool.connections.each(&:close)
       end
 
       class FakePool
         attr_reader :reaped
+        attr_reader :flushed
 
         def initialize
           @reaped = false
@@ -25,20 +27,24 @@ module ActiveRecord
         def reap
           @reaped = true
         end
+
+        def flush
+          @flushed = true
+        end
       end
 
       # A reaper with nil time should never reap connections
       def test_nil_time
         fp = FakePool.new
-        assert !fp.reaped
+        assert_not fp.reaped
         reaper = ConnectionPool::Reaper.new(fp, nil)
         reaper.run
-        assert !fp.reaped
+        assert_not fp.reaped
       end
 
       def test_some_time
         fp = FakePool.new
-        assert !fp.reaped
+        assert_not fp.reaped
 
         reaper = ConnectionPool::Reaper.new(fp, 0.0001)
         reaper.run
@@ -46,6 +52,7 @@ module ActiveRecord
           Thread.pass
         end
         assert fp.reaped
+        assert fp.flushed
       end
 
       def test_pool_has_reaper
@@ -61,20 +68,25 @@ module ActiveRecord
 
       def test_connection_pool_starts_reaper
         spec = ActiveRecord::Base.connection_pool.spec.dup
-        spec.config[:reaping_frequency] = 0.0001
+        spec.config[:reaping_frequency] = "0.0001"
 
         pool = ConnectionPool.new spec
-        pool.timeout = 0
 
-        conn = pool.checkout
-        count = pool.connections.length
+        conn = nil
+        child = Thread.new do
+          conn = pool.checkout
+          Thread.stop
+        end
+        Thread.pass while conn.nil?
 
-        conn.extend(Module.new { def active?; false; end; })
+        assert_predicate conn, :in_use?
 
-        while count == pool.connections.length
+        child.terminate
+
+        while conn.in_use?
           Thread.pass
         end
-        assert_equal(count - 1, pool.connections.length)
+        assert_not_predicate conn, :in_use?
       end
     end
   end

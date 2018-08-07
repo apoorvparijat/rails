@@ -1,22 +1,21 @@
+# frozen_string_literal: true
+
+require "active_record/associations/join_dependency/join_part"
+
 module ActiveRecord
   module Associations
     class JoinDependency # :nodoc:
       class JoinBase < JoinPart # :nodoc:
-        def ==(other)
-          other.class == self.class &&
-            other.active_record == active_record
+        attr_reader :table
+
+        def initialize(base_klass, table, children)
+          super(base_klass, children)
+          @table = table
         end
 
-        def aliased_prefix
-          "t0"
-        end
-
-        def table
-          Arel::Table.new(table_name, arel_engine)
-        end
-
-        def aliased_table_name
-          active_record.table_name
+        def match?(other)
+          return true if self == other
+          super && base_klass == other.base_klass
         end
       end
     end

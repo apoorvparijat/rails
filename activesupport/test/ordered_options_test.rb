@@ -1,4 +1,7 @@
-require 'abstract_unit'
+# frozen_string_literal: true
+
+require "abstract_unit"
+require "active_support/ordered_options"
 
 class OrderedOptionsTest < ActiveSupport::TestCase
   def test_usage
@@ -6,13 +9,13 @@ class OrderedOptionsTest < ActiveSupport::TestCase
 
     assert_nil a[:not_set]
 
-    a[:allow_concurreny] = true
+    a[:allow_concurrency] = true
     assert_equal 1, a.size
-    assert a[:allow_concurreny]
+    assert a[:allow_concurrency]
 
-    a[:allow_concurreny] = false
+    a[:allow_concurrency] = false
     assert_equal 1, a.size
-    assert !a[:allow_concurreny]
+    assert_not a[:allow_concurrency]
 
     a["else_where"] = 56
     assert_equal 2, a.size
@@ -22,10 +25,10 @@ class OrderedOptionsTest < ActiveSupport::TestCase
   def test_looping
     a = ActiveSupport::OrderedOptions.new
 
-    a[:allow_concurreny] = true
+    a[:allow_concurrency] = true
     a["else_where"] = 56
 
-    test = [[:allow_concurreny, true], [:else_where, 56]]
+    test = [[:allow_concurrency, true], [:else_where, 56]]
 
     a.each_with_index do |(key, value), index|
       assert_equal test[index].first, key
@@ -38,13 +41,13 @@ class OrderedOptionsTest < ActiveSupport::TestCase
 
     assert_nil a.not_set
 
-    a.allow_concurreny = true
+    a.allow_concurrency = true
     assert_equal 1, a.size
-    assert a.allow_concurreny
+    assert a.allow_concurrency
 
-    a.allow_concurreny = false
+    a.allow_concurrency = false
     assert_equal 1, a.size
-    assert !a.allow_concurreny
+    assert_not a.allow_concurrency
 
     a.else_where = 56
     assert_equal 2, a.size
@@ -75,5 +78,41 @@ class OrderedOptionsTest < ActiveSupport::TestCase
 
     assert copy.kind_of?(original.class)
     assert_not_equal copy.object_id, original.object_id
+  end
+
+  def test_introspection
+    a = ActiveSupport::OrderedOptions.new
+    assert_respond_to a, :blah
+    assert_respond_to a, :blah=
+    assert_equal 42, a.method(:blah=).call(42)
+    assert_equal 42, a.method(:blah).call
+  end
+
+  def test_raises_with_bang
+    a = ActiveSupport::OrderedOptions.new
+    a[:foo] = :bar
+    assert_respond_to a, :foo!
+
+    assert_nothing_raised { a.foo! }
+    assert_equal a.foo, a.foo!
+
+    assert_raises(KeyError) do
+      a.foo = nil
+      a.foo!
+    end
+    assert_raises(KeyError) { a.non_existing_key! }
+  end
+
+  def test_inheritable_options_with_bang
+    a = ActiveSupport::InheritableOptions.new(foo: :bar)
+
+    assert_nothing_raised { a.foo! }
+    assert_equal a.foo, a.foo!
+
+    assert_raises(KeyError) do
+      a.foo = nil
+      a.foo!
+    end
+    assert_raises(KeyError) { a.non_existing_key! }
   end
 end

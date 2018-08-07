@@ -1,4 +1,6 @@
-require 'abstract_unit'
+# frozen_string_literal: true
+
+require "abstract_unit"
 
 module ActionDispatch
   module Routing
@@ -22,7 +24,7 @@ module ActionDispatch
         x = Class.new {
           include rs.url_helpers
         }
-        assert_raises ActionController::RoutingError do
+        assert_raises ActionController::UrlGenerationError do
           x.new.pond_duck_path Duck.new
         end
       end

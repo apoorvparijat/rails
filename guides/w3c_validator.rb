@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # ---------------------------------------------------------------------------
 #
 # This script validates the generated guides against the W3C Validator.
@@ -5,9 +7,9 @@
 # Guides are taken from the output directory, from where all .html files are
 # submitted to the validator.
 #
-# This script is prepared to be launched from the railties directory as a rake task:
+# This script is prepared to be launched from the guides directory as a rake task:
 #
-# rake validate_guides
+# rake guides:validate
 #
 # If nothing is specified, all files will be validated, but you can check just
 # some of them using this environment variable:
@@ -17,35 +19,39 @@
 #     enough:
 #
 #       # validates only association_basics.html
-#       ONLY=assoc rake validate_guides
+#       rake guides:validate ONLY=assoc
 #
 #     Separate many using commas:
 #
-#       # validates only association_basics.html and migrations.html
-#       ONLY=assoc,migrations rake validate_guides
+#       # validates only association_basics.html and command_line.html
+#       rake guides:validate ONLY=assoc,command
 #
 # ---------------------------------------------------------------------------
 
-require 'rubygems'
-require 'w3c_validators'
+require "w3c_validators"
 include W3CValidators
 
 module RailsGuides
   class Validator
-
     def validate
-      validator = MarkupValidator.new
+      # https://github.com/w3c-validators/w3c_validators/issues/25
+      validator = NuValidator.new
       STDOUT.sync = true
       errors_on_guides = {}
 
       guides_to_validate.each do |f|
-        results = validator.validate_file(f)
+        begin
+          results = validator.validate_file(f)
+        rescue Exception => e
+          puts "\nCould not validate #{f} because of #{e}"
+          next
+        end
 
-        if results.validity
-          print "."
-        else
+        if results.errors.length > 0
           print "E"
           errors_on_guides[f] = results.errors
+        else
+          print "."
         end
       end
 
@@ -53,38 +59,39 @@ module RailsGuides
     end
 
     private
-    def guides_to_validate
-      guides = Dir["./guides/output/*.html"]
-      guides.delete("./guides/output/layout.html")
-      ENV.key?('ONLY') ? select_only(guides) : guides
-    end
-
-    def select_only(guides)
-      prefixes = ENV['ONLY'].split(",").map(&:strip)
-      guides.select do |guide|
-        prefixes.any? {|p| guide.start_with?("./guides/output/#{p}")}
+      def guides_to_validate
+        guides = Dir["./output/*.html"]
+        guides.delete("./output/layout.html")
+        guides.delete("./output/_license.html")
+        guides.delete("./output/_welcome.html")
+        ENV.key?("ONLY") ? select_only(guides) : guides
       end
-    end
 
-    def show_results(error_list)
-      if error_list.size == 0
-        puts "\n\nAll checked guides validate OK!"
-      else
-        error_summary = error_detail = ""
-
-        error_list.each_pair do |name, errors|
-          error_summary += "\n  #{name}"
-          error_detail += "\n\n  #{name} has #{errors.size} validation error(s):\n"
-          errors.each do |error|
-            error_detail += "\n    "+error.to_s.gsub("\n", "")
-          end
+      def select_only(guides)
+        prefixes = ENV["ONLY"].split(",").map(&:strip)
+        guides.select do |guide|
+          prefixes.any? { |p| guide.start_with?("./output/#{p}") }
         end
-
-        puts "\n\nThere are #{error_list.size} guides with validation errors:\n" + error_summary
-        puts "\nHere are the detailed errors for each guide:" + error_detail
       end
-    end
 
+      def show_results(error_list)
+        if error_list.size == 0
+          puts "\n\nAll checked guides validate OK!"
+        else
+          error_summary = error_detail = ""
+
+          error_list.each_pair do |name, errors|
+            error_summary += "\n  #{name}"
+            error_detail += "\n\n  #{name} has #{errors.size} validation error(s):\n"
+            errors.each do |error|
+              error_detail += "\n    " + error.to_s.delete("\n")
+            end
+          end
+
+          puts "\n\nThere are #{error_list.size} guides with validation errors:\n" + error_summary
+          puts "\nHere are the detailed errors for each guide:" + error_detail
+        end
+      end
   end
 end
 

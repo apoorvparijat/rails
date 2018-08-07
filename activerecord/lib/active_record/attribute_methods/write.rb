@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ActiveRecord
   module AttributeMethods
     module Write
@@ -7,52 +9,60 @@ module ActiveRecord
         attribute_method_suffix "="
       end
 
-      module ClassMethods
-        protected
-          def define_method_attribute=(attr_name)
-            if attr_name =~ ActiveModel::AttributeMethods::NAME_COMPILABLE_REGEXP
-              generated_attribute_methods.module_eval("def #{attr_name}=(new_value); write_attribute('#{attr_name}', new_value); end", __FILE__, __LINE__)
-            else
-              generated_attribute_methods.send(:define_method, "#{attr_name}=") do |new_value|
-                write_attribute(attr_name, new_value)
+      module ClassMethods # :nodoc:
+        private
+
+          def define_method_attribute=(name)
+            safe_name = name.unpack1("h*".freeze)
+            ActiveRecord::AttributeMethods::AttrNames.set_name_cache safe_name, name
+            sync_with_transaction_state = "sync_with_transaction_state" if name == primary_key
+
+            generated_attribute_methods.module_eval <<-STR, __FILE__, __LINE__ + 1
+              def __temp__#{safe_name}=(value)
+                name = ::ActiveRecord::AttributeMethods::AttrNames::ATTR_#{safe_name}
+                #{sync_with_transaction_state}
+                _write_attribute(name, value)
               end
-            end
+              alias_method #{(name + '=').inspect}, :__temp__#{safe_name}=
+              undef_method :__temp__#{safe_name}=
+            STR
           end
       end
 
-      # Updates the attribute identified by <tt>attr_name</tt> with the specified +value+. Empty strings
-      # for fixnum and float columns are turned into +nil+.
+      # Updates the attribute identified by <tt>attr_name</tt> with the
+      # specified +value+. Empty strings for Integer and Float columns are
+      # turned into +nil+.
       def write_attribute(attr_name, value)
-        attr_name = attr_name.to_s
-        attr_name = self.class.primary_key if attr_name == 'id' && self.class.primary_key
-        @attributes_cache.delete(attr_name)
-        column = column_for_attribute(attr_name)
-
-        # If we're dealing with a binary column, write the data to the cache
-        # so we don't attempt to typecast multiple times.
-        if column && column.binary?
-          @attributes_cache[attr_name] = value
-        end
-
-        if column || @attributes.has_key?(attr_name)
-          @attributes[attr_name] = type_cast_attribute_for_write(column, value)
+        name = if self.class.attribute_alias?(attr_name)
+          self.class.attribute_alias(attr_name).to_s
         else
-          raise ActiveModel::MissingAttributeError, "can't write unknown attribute `#{attr_name}'"
+          attr_name.to_s
         end
+
+        primary_key = self.class.primary_key
+        name = primary_key if name == "id".freeze && primary_key
+        sync_with_transaction_state if name == primary_key
+        _write_attribute(name, value)
       end
-      alias_method :raw_write_attribute, :write_attribute
+
+      # This method exists to avoid the expensive primary_key check internally, without
+      # breaking compatibility with the write_attribute API
+      def _write_attribute(attr_name, value) # :nodoc:
+        @attributes.write_from_user(attr_name.to_s, value)
+        value
+      end
 
       private
-      # Handle *= for method_missing.
-      def attribute=(attribute_name, value)
-        write_attribute(attribute_name, value)
-      end
+        def write_attribute_without_type_cast(attr_name, value)
+          name = attr_name.to_s
+          @attributes.write_cast_value(name, value)
+          value
+        end
 
-      def type_cast_attribute_for_write(column, value)
-        return value unless column
-
-        column.type_cast_for_write value
-      end
+        # Handle *= for method_missing.
+        def attribute=(attribute_name, value)
+          _write_attribute(attribute_name, value)
+        end
     end
   end
 end

@@ -1,19 +1,21 @@
+# frozen_string_literal: true
+
 require "cases/helper"
 
 class TestRecord < ActiveRecord::Base
 end
 
 class TestUnconnectedAdapter < ActiveRecord::TestCase
-  self.use_transactional_fixtures = false
+  self.use_transactional_tests = false
 
   def setup
-    @underlying = ActiveRecord::Model.connection
-    @specification = ActiveRecord::Model.remove_connection
+    @underlying = ActiveRecord::Base.connection
+    @specification = ActiveRecord::Base.remove_connection
   end
 
-  def teardown
+  teardown do
     @underlying = nil
-    ActiveRecord::Model.establish_connection(@specification)
+    ActiveRecord::Base.establish_connection(@specification)
     load_schema if in_memory_db?
   end
 
@@ -28,6 +30,6 @@ class TestUnconnectedAdapter < ActiveRecord::TestCase
   end
 
   def test_underlying_adapter_no_longer_active
-    assert !@underlying.active?, "Removed adapter should no longer be active"
+    assert_not @underlying.active?, "Removed adapter should no longer be active"
   end
 end
